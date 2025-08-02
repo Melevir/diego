@@ -5,17 +5,19 @@
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-A powerful command-line news aggregator powered by [NewsAPI](https://newsapi.org/), featuring a clean wrapper library and comprehensive CLI interface.
+A powerful command-line news aggregator supporting multiple news sources including [NewsAPI](https://newsapi.org/) and [The Guardian](https://www.theguardian.com), featuring clean wrapper libraries and a comprehensive CLI interface.
 
 ## ✨ Features
 
-- 🔍 **Search articles** by keywords or phrases
+- 🔄 **Multiple News Sources**: NewsAPI and Guardian API support with auto-fallback
+- 🔍 **Search articles** by keywords or phrases across all sources
 - 📊 **Browse news by category** (business, tech, sports, etc.)
 - 🌍 **Filter by country** and language
 - 📺 **List news sources** with filtering options
 - 🎨 **Multiple output formats** (simple, detailed, JSON)
 - ⚙️ **Environment-based configuration**
 - 🧪 **Comprehensive test suite** (89% coverage)
+- 🛡️ **Robust error handling** with graceful source switching
 
 ## 🚀 Quick Start
 
@@ -29,8 +31,9 @@ cd diego
 # Install dependencies
 pip install -r requirements-test.txt
 
-# Set your NewsAPI key
+# Set your API keys (at least one is required)
 export NEWS_API_KEY='your-api-key-from-newsapi.org'
+export GUARDIAN_API_KEY='your-api-key-from-guardian'
 ```
 
 ### Usage
@@ -39,8 +42,12 @@ export NEWS_API_KEY='your-api-key-from-newsapi.org'
 # List available news categories
 python cli.py list-topics
 
-# Get top technology news
+# Get top technology news (auto-selects best available source)
 python cli.py get-news --topic technology
+
+# Use specific news source
+python cli.py get-news --source guardian --topic technology
+python cli.py get-news --source newsapi --topic business
 
 # Search for specific topics
 python cli.py get-news --query "artificial intelligence"
@@ -48,8 +55,9 @@ python cli.py get-news --query "artificial intelligence"
 # Get detailed format with custom options
 python cli.py get-news --topic business --country uk --limit 5 --format detailed
 
-# List news sources
-python cli.py sources --topic technology
+# List news sources from different providers
+python cli.py sources --source guardian --topic technology
+python cli.py sources --source newsapi
 
 # Check current configuration
 python cli.py config
@@ -60,17 +68,26 @@ python cli.py config
 | Command | Description | Example |
 |---------|-------------|---------|
 | `list-topics` | Show available news categories | `python cli.py list-topics` |
-| `get-news` | Get news by topic or search query | `python cli.py get-news --topic tech` |
-| `sources` | List available news sources | `python cli.py sources --topic business` |
+| `get-news` | Get news by topic or search query | `python cli.py get-news --source guardian --topic tech` |
+| `sources` | List available news sources | `python cli.py sources --source newsapi --topic business` |
 | `config` | Show current configuration | `python cli.py config` |
+
+### Source Options
+
+All commands support a `--source` option to specify the news provider:
+
+- `--source newsapi` - Use NewsAPI (80,000+ sources worldwide)
+- `--source guardian` - Use The Guardian API (Guardian content only, historical archive back to 1999)
+- `--source auto` - Auto-select best available source (default behavior)
 
 ## ⚙️ Configuration
 
 Configure Diego using environment variables:
 
 ```bash
-# Required
-export NEWS_API_KEY='your-newsapi-key'
+# API Keys (at least one required)
+export NEWS_API_KEY='your-newsapi-key'        # Get from https://newsapi.org/
+export GUARDIAN_API_KEY='your-guardian-key'   # Get from https://open-platform.theguardian.com/access/
 
 # Optional (with defaults)
 export NEWS_DEFAULT_COUNTRY='us'          # Default country
@@ -81,9 +98,14 @@ export NEWS_DEFAULT_FORMAT='simple'       # Default output format
 export APP_VERSION='1.0.0'                # App version
 ```
 
+### API Key Setup
+
+1. **NewsAPI**: Visit [newsapi.org](https://newsapi.org/) to get a free API key (1,000 requests/month)
+2. **Guardian API**: Visit [Guardian Open Platform](https://open-platform.theguardian.com/access/) to get a free API key (5,000 requests/day)
+
 ## 🏗️ Architecture
 
-Diego consists of three main components:
+Diego consists of four main components:
 
 ### 1. NewsOrgApiClient (`news_org_api_client.py`)
 Clean wrapper around the `newsapi-python` library with simplified signatures:
@@ -91,19 +113,27 @@ Clean wrapper around the `newsapi-python` library with simplified signatures:
 - `search_articles()` - Search through all articles
 - `get_sources()` - Get available news sources
 
-### 2. Config Management (`config.py`)
+### 2. GuardianApiClient (`guardian_api_client.py`)
+Clean wrapper around The Guardian's Open Platform API with NewsAPI-compatible interface:
+- `get_top_headlines()` - Get breaking news and top stories from Guardian
+- `search_articles()` - Search through Guardian's archive (1999-present)
+- `get_sources()` - Get Guardian sections as "sources"
+- Full compatibility with NewsOrgApiClient interface for seamless source switching
+
+### 3. Config Management (`config.py`)
 Environment-based configuration with validation:
-- Dataclass-based configuration
-- Environment variable loading
-- Validation with detailed error messages
+- Dataclass-based configuration supporting multiple API keys
+- Environment variable loading with fallbacks
+- Source-specific validation with detailed error messages
 - Global singleton pattern
 
-### 3. CLI Interface (`cli.py`)
+### 4. CLI Interface (`cli.py`)
 Feature-rich command-line interface built with Click:
 - Multiple commands with intuitive options
+- Source selection with auto-fallback (`--source` option)
 - Multiple output formats (simple, detailed, JSON)
-- Comprehensive error handling
-- Configuration integration
+- Comprehensive error handling with graceful source switching
+- Configuration integration with multiple APIs
 
 ## 🧪 Testing
 

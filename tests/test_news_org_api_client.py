@@ -1,20 +1,20 @@
 import pytest
 from typing import Dict, Any
 
-from news_org_api_client import NewsOrgApiClient
+from diego.backends import NewsApiBackend
 
 
 async def test__news_org_api_client_init__creates_underlying_client(mocked_newsapi_client, config) -> None:
-    """Test NewsOrgApiClient initialization creates underlying client."""
+    """Test NewsApiBackend initialization creates underlying client."""
     api_key = "test-api-key"
-    NewsOrgApiClient(api_key)
+    NewsApiBackend(api_key)
 
     # Verify the underlying NewsApiClient was initialized with correct API key
     mocked_newsapi_client.assert_called_once_with(api_key=api_key)
 
 
 async def test__get_top_headlines__success_with_query(
-    news_client: NewsOrgApiClient, news_api_response: Dict[str, Any]
+    news_client: NewsApiBackend, news_api_response: Dict[str, Any]
 ) -> None:
     """Test successful get_top_headlines call with query."""
     # Setup mock
@@ -35,7 +35,7 @@ async def test__get_top_headlines__success_with_query(
 
 
 async def test__get_top_headlines__with_sources_excludes_country(
-    news_client: NewsOrgApiClient, news_api_response: Dict[str, Any]
+    news_client: NewsApiBackend, news_api_response: Dict[str, Any]
 ) -> None:
     """Test that country is excluded when sources is provided (API requirement)."""
     news_client._client.get_top_headlines.return_value = news_api_response
@@ -61,7 +61,7 @@ async def test__get_top_headlines__with_sources_excludes_country(
     ],
 )
 async def test__get_top_headlines__with_various_parameters(
-    news_client: NewsOrgApiClient,
+    news_client: NewsApiBackend,
     news_api_response: Dict[str, Any],
     query: str,
     country: str,
@@ -79,7 +79,7 @@ async def test__get_top_headlines__with_various_parameters(
 
 
 async def test__get_top_headlines__api_error_response(
-    news_client: NewsOrgApiClient, news_api_error_response: Dict[str, Any]
+    news_client: NewsApiBackend, news_api_error_response: Dict[str, Any]
 ) -> None:
     """Test get_top_headlines with API error response."""
     news_client._client.get_top_headlines.return_value = news_api_error_response
@@ -91,7 +91,7 @@ async def test__get_top_headlines__api_error_response(
     assert result["code"] == "apiKeyInvalid"
 
 
-async def test__get_top_headlines__handles_exception(news_client: NewsOrgApiClient) -> None:
+async def test__get_top_headlines__handles_exception(news_client: NewsApiBackend) -> None:
     """Test get_top_headlines with exception handling."""
     # Setup mock to raise exception
     news_client._client.get_top_headlines.side_effect = Exception("Network error")
@@ -104,7 +104,7 @@ async def test__get_top_headlines__handles_exception(news_client: NewsOrgApiClie
 
 
 async def test__search_articles__success_with_dates(
-    news_client: NewsOrgApiClient, news_api_response: Dict[str, Any]
+    news_client: NewsApiBackend, news_api_response: Dict[str, Any]
 ) -> None:
     """Test successful search_articles call with date filtering."""
     news_client._client.get_everything.return_value = news_api_response
@@ -133,7 +133,7 @@ async def test__search_articles__success_with_dates(
     ],
 )
 async def test__search_articles__with_various_options(
-    news_client: NewsOrgApiClient, news_api_response: Dict[str, Any], language: str, sort_by: str, page_size: int
+    news_client: NewsApiBackend, news_api_response: Dict[str, Any], language: str, sort_by: str, page_size: int
 ) -> None:
     """Test search_articles with various language and sorting options."""
     news_client._client.get_everything.return_value = news_api_response
@@ -146,7 +146,7 @@ async def test__search_articles__with_various_options(
 
 
 async def test__search_articles__minimal_required_parameter(
-    news_client: NewsOrgApiClient, news_api_response: Dict[str, Any]
+    news_client: NewsApiBackend, news_api_response: Dict[str, Any]
 ) -> None:
     """Test search_articles with only required parameter."""
     news_client._client.get_everything.return_value = news_api_response
@@ -158,7 +158,7 @@ async def test__search_articles__minimal_required_parameter(
     )
 
 
-async def test__search_articles__handles_exception(news_client: NewsOrgApiClient) -> None:
+async def test__search_articles__handles_exception(news_client: NewsApiBackend) -> None:
     """Test search_articles exception handling."""
     news_client._client.get_everything.side_effect = ValueError("Invalid query")
 
@@ -170,7 +170,7 @@ async def test__search_articles__handles_exception(news_client: NewsOrgApiClient
 
 
 async def test__get_sources__success_with_filters(
-    news_client: NewsOrgApiClient, sources_response: Dict[str, Any]
+    news_client: NewsApiBackend, sources_response: Dict[str, Any]
 ) -> None:
     """Test successful get_sources call with category and country filters."""
     news_client._client.get_sources.return_value = sources_response
@@ -185,7 +185,7 @@ async def test__get_sources__success_with_filters(
 
 
 async def test__get_sources__with_default_parameters(
-    news_client: NewsOrgApiClient, sources_response: Dict[str, Any]
+    news_client: NewsApiBackend, sources_response: Dict[str, Any]
 ) -> None:
     """Test get_sources with default parameters."""
     news_client._client.get_sources.return_value = sources_response
@@ -195,7 +195,7 @@ async def test__get_sources__with_default_parameters(
     news_client._client.get_sources.assert_called_once_with(category=None, country=None, language="en")
 
 
-async def test__get_sources__handles_exception(news_client: NewsOrgApiClient) -> None:
+async def test__get_sources__handles_exception(news_client: NewsApiBackend) -> None:
     """Test get_sources exception handling."""
     news_client._client.get_sources.side_effect = ConnectionError("Connection failed")
 
@@ -206,33 +206,37 @@ async def test__get_sources__handles_exception(news_client: NewsOrgApiClient) ->
     assert result["code"] == "client_error"
 
 
-async def test__handle_response__with_success_status(news_client: NewsOrgApiClient) -> None:
-    """Test _handle_response with successful response."""
-    response = {"status": "ok", "data": "test"}
-    result = news_client._handle_response(response)
+async def test__standardize_response__with_success_status(news_client: NewsApiBackend) -> None:
+    """Test _standardize_response with successful response."""
+    response = {"status": "ok", "articles": [{"title": "test"}], "totalResults": 1}
+    result = news_client._standardize_response(response)
 
     assert result == response
 
 
-async def test__handle_response__with_api_error_status(news_client: NewsOrgApiClient) -> None:
-    """Test _handle_response with API error response."""
+async def test__standardize_response__with_api_error_status(news_client: NewsApiBackend) -> None:
+    """Test _standardize_response with API error response."""
     response = {"status": "error", "message": "API error", "code": "apiKeyInvalid"}
-    result = news_client._handle_response(response)
+    result = news_client._standardize_response(response)
 
-    assert result == response
+    assert result == {
+        "status": "error",
+        "message": "API error", 
+        "code": "apiKeyInvalid"
+    }
 
 
-async def test__handle_response__with_unknown_error_format(news_client: NewsOrgApiClient) -> None:
-    """Test _handle_response with unknown error format."""
+async def test__standardize_response__with_unknown_status(news_client: NewsApiBackend) -> None:
+    """Test _standardize_response with unknown status format."""
     response = {"status": "unknown"}
-    result = news_client._handle_response(response)
+    result = news_client._standardize_response(response)
 
     assert result["status"] == "error"
     assert result["message"] == "Unknown API error"
     assert result["code"] == "unknown"
 
 
-async def test__handle_error__formats_exception_message(news_client: NewsOrgApiClient) -> None:
+async def test__handle_error__formats_exception_message(news_client: NewsApiBackend) -> None:
     """Test _handle_error method formats exception message correctly."""
     error = ValueError("Test error message")
     result = news_client._handle_error(error)
@@ -255,7 +259,7 @@ async def test__wrapper_methods__call_correct_underlying_methods(
 ) -> None:
     """Test that wrapper methods call correct underlying client methods."""
     # Setup
-    client = NewsOrgApiClient("test-key")
+    client = NewsApiBackend("test-key")
     method = getattr(client, method_name)
     mock_response = {"status": "ok", "data": "test"}
     getattr(client._client, expected_client_method).return_value = mock_response
@@ -283,7 +287,7 @@ async def test__wrapper_methods__call_correct_underlying_methods(
     ],
 )
 async def test__validate_page_size__with_various_inputs(
-    news_client: NewsOrgApiClient, page_size: Any, should_raise: bool
+    news_client: NewsApiBackend, page_size: Any, should_raise: bool
 ) -> None:
     """Test page_size validation with various input types and values."""
     if should_raise:
@@ -294,7 +298,7 @@ async def test__validate_page_size__with_various_inputs(
         news_client._validate_page_size(page_size)
 
 
-async def test__get_top_headlines__validates_page_size(news_client: NewsOrgApiClient) -> None:
+async def test__get_top_headlines__validates_page_size(news_client: NewsApiBackend) -> None:
     """Test that get_top_headlines validates page_size parameter."""
     result = news_client.get_top_headlines(page_size=0)
 
@@ -303,7 +307,7 @@ async def test__get_top_headlines__validates_page_size(news_client: NewsOrgApiCl
     assert result["code"] == "client_error"
 
 
-async def test__search_articles__validates_page_size(news_client: NewsOrgApiClient) -> None:
+async def test__search_articles__validates_page_size(news_client: NewsApiBackend) -> None:
     """Test that search_articles validates page_size parameter."""
     result = news_client.search_articles(query="test", page_size=101)
 
