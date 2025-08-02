@@ -1,0 +1,44 @@
+[tool.pytest.ini_options]
+asyncio_mode = 'auto'
+norecursedirs = ['.git', '.venv', '__pycache__']
+python_files = ['tests.py', 'test_*.py', '*_tests.py']
+testpaths = ['tests']
+addopts = [
+    '--strict-markers',
+    '--strict-config',
+    '--verbose',
+    '-ra'
+]
+
+[tool.coverage.run]
+source = ['.']
+omit = [
+    'tests/*',
+    'example_usage.py',
+    '.venv/*',
+    '*/__pycache__/*'
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    'pragma: no cover',
+    'def __repr__',
+    'if self.debug:',
+    'if settings.DEBUG',
+    'raise AssertionError',
+    'raise NotImplementedError',
+    'if 0:',
+    'if __name__ == .__main__.:'
+]
+
+[tool.mypy]
+python_version = "3.12"
+check_untyped_defs = true
+disallow_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
