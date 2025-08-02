@@ -146,8 +146,8 @@ def _print_simple_article(index, article):
         try:
             dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
             published = dt.strftime('%Y-%m-%d %H:%M')
-        except:
-            pass
+        except (ValueError, TypeError):
+            published = 'Invalid date'
     
     click.echo(f"{index:2}. {title}")
     click.echo(f"    Source: {source} | {published}")
@@ -165,8 +165,8 @@ def _print_detailed_article(index, article):
         try:
             dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
             published = dt.strftime('%Y-%m-%d %H:%M UTC')
-        except:
-            pass
+        except (ValueError, TypeError):
+            published = 'Invalid date'
     
     click.echo(f"{index:2}. {title}")
     click.echo(f"    Source: {source}")

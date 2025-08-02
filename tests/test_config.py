@@ -194,3 +194,44 @@ async def test__reload_config__creates_new_instance(valid_env_vars: Dict[str, st
         # Subsequent get_config should return the reloaded config
         config3 = get_config()
         assert config3 is config2
+
+
+@pytest.mark.parametrize(
+    ["env_value", "expected_value"],
+    [
+        ("10", 10),          # Valid integer string
+        ("invalid", 10),     # Invalid string uses default
+        ("", 10),            # Empty string uses default
+        ("50.5", 10),        # Float string uses default
+        ("abc123", 10),      # Mixed string uses default
+    ],
+)
+async def test__config_from_env__safe_int_conversion(
+    env_value: str,
+    expected_value: int
+) -> None:
+    """Test that safe_int conversion handles invalid values gracefully."""
+    env_vars = {
+        'NEWS_API_KEY': 'test-key',
+        'NEWS_DEFAULT_PAGE_SIZE': env_value
+    }
+    
+    with patch.dict(os.environ, env_vars, clear=True):
+        config = Config.from_env()
+        assert config.default_page_size == expected_value
+
+
+async def test__config_from_env__safe_int_both_size_vars() -> None:
+    """Test safe_int conversion for both page size environment variables."""
+    env_vars = {
+        'NEWS_API_KEY': 'test-key',
+        'NEWS_DEFAULT_PAGE_SIZE': 'invalid1',
+        'NEWS_MAX_PAGE_SIZE': 'invalid2'
+    }
+    
+    with patch.dict(os.environ, env_vars, clear=True):
+        config = Config.from_env()
+        
+        # Should use defaults when conversion fails
+        assert config.default_page_size == 10   # default
+        assert config.max_page_size == 100      # default

@@ -21,12 +21,19 @@ class Config:
     @classmethod
     def from_env(cls) -> 'Config':
         """Create Config instance from environment variables."""
+        def safe_int(value: str, default: int) -> int:
+            """Safely convert string to int with fallback to default."""
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                return default
+        
         return cls(
             news_api_key=os.getenv('NEWS_API_KEY'),
             default_country=os.getenv('NEWS_DEFAULT_COUNTRY', 'us'),
             default_language=os.getenv('NEWS_DEFAULT_LANGUAGE', 'en'),
-            default_page_size=int(os.getenv('NEWS_DEFAULT_PAGE_SIZE', '10')),
-            max_page_size=int(os.getenv('NEWS_MAX_PAGE_SIZE', '100')),
+            default_page_size=safe_int(os.getenv('NEWS_DEFAULT_PAGE_SIZE', '10'), 10),
+            max_page_size=safe_int(os.getenv('NEWS_MAX_PAGE_SIZE', '100'), 100),
             default_format=os.getenv('NEWS_DEFAULT_FORMAT', 'simple'),
             app_version=os.getenv('APP_VERSION', '1.0.0')
         )

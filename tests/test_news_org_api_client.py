@@ -342,3 +342,53 @@ async def test__wrapper_methods__call_correct_underlying_methods(
     # Verify correct underlying method was called
     getattr(client._client, expected_client_method).assert_called_once()
     assert result == mock_response
+
+
+@pytest.mark.parametrize(
+    ["page_size", "should_raise"],
+    [
+        (1, False),      # Valid: minimum
+        (50, False),     # Valid: middle range
+        (100, False),    # Valid: maximum
+        (0, True),       # Invalid: too small
+        (-1, True),      # Invalid: negative
+        (101, True),     # Invalid: too large
+        ("50", True),    # Invalid: string
+        (None, True),    # Invalid: None
+        (50.5, True),    # Invalid: float
+    ],
+)
+async def test__validate_page_size__with_various_inputs(
+    news_client: NewsOrgApiClient,
+    page_size: Any,
+    should_raise: bool
+) -> None:
+    """Test page_size validation with various input types and values."""
+    if should_raise:
+        with pytest.raises(ValueError, match="page_size must be an integer between 1 and 100"):
+            news_client._validate_page_size(page_size)
+    else:
+        # Should not raise
+        news_client._validate_page_size(page_size)
+
+
+async def test__get_top_headlines__validates_page_size(
+    news_client: NewsOrgApiClient
+) -> None:
+    """Test that get_top_headlines validates page_size parameter."""
+    result = news_client.get_top_headlines(page_size=0)
+    
+    assert result['status'] == 'error'
+    assert 'page_size must be an integer between 1 and 100' in result['message']
+    assert result['code'] == 'client_error'
+
+
+async def test__search_articles__validates_page_size(
+    news_client: NewsOrgApiClient
+) -> None:
+    """Test that search_articles validates page_size parameter."""
+    result = news_client.search_articles(query="test", page_size=101)
+    
+    assert result['status'] == 'error'
+    assert 'page_size must be an integer between 1 and 100' in result['message']
+    assert result['code'] == 'client_error'

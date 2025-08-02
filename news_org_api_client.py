@@ -20,6 +20,11 @@ class NewsOrgApiClient:
         """
         self._client = NewsApiClient(api_key=api_key)
     
+    def _validate_page_size(self, page_size: int) -> None:
+        """Validate page_size parameter."""
+        if not isinstance(page_size, int) or page_size < 1 or page_size > 100:
+            raise ValueError("page_size must be an integer between 1 and 100")
+    
     def get_top_headlines(
         self, 
         query: Optional[str] = None,
@@ -47,6 +52,7 @@ class NewsOrgApiClient:
             >>> print(f"Found {headlines['totalResults']} articles")
         """
         try:
+            self._validate_page_size(page_size)
             response = self._client.get_top_headlines(
                 q=query,
                 country=country if not sources else None,  # country and sources are mutually exclusive
@@ -88,6 +94,7 @@ class NewsOrgApiClient:
             ...     print(article['title'])
         """
         try:
+            self._validate_page_size(page_size)
             response = self._client.get_everything(
                 q=query,
                 from_param=from_date,
