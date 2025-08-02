@@ -1,5 +1,10 @@
 # Diego - News CLI Tool 📰
 
+[![CI Pipeline](https://github.com/Melevir/diego/actions/workflows/ci.yml/badge.svg)](https://github.com/Melevir/diego/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-89%25-brightgreen)](https://github.com/Melevir/diego/actions)
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
 A powerful command-line news aggregator powered by [NewsAPI](https://newsapi.org/), featuring a clean wrapper library and comprehensive CLI interface.
 
 ## ✨ Features
