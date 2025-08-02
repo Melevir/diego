@@ -5,7 +5,7 @@ This package contains the news API client implementations with a common interfac
 """
 
 from .base import BaseBackend
-from .newsapi_client import NewsApiBackend  
+from .newsapi_client import NewsApiBackend
 from .guardian_client import GuardianBackend
 
-__all__ = ['BaseBackend', 'NewsApiBackend', 'GuardianBackend']
+__all__ = ["BaseBackend", "NewsApiBackend", "GuardianBackend"]

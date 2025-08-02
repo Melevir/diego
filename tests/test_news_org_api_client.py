@@ -219,11 +219,7 @@ async def test__standardize_response__with_api_error_status(news_client: NewsApi
     response = {"status": "error", "message": "API error", "code": "apiKeyInvalid"}
     result = news_client._standardize_response(response)
 
-    assert result == {
-        "status": "error",
-        "message": "API error", 
-        "code": "apiKeyInvalid"
-    }
+    assert result == {"status": "error", "message": "API error", "code": "apiKeyInvalid"}
 
 
 async def test__standardize_response__with_unknown_status(news_client: NewsApiBackend) -> None:

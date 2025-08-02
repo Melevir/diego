@@ -5,7 +5,6 @@ import os
 
 @dataclass
 class Config:
-
     news_api_key: Optional[str] = None
     guardian_api_key: Optional[str] = None
     default_country: str = "us"
@@ -18,7 +17,6 @@ class Config:
 
     @classmethod
     def from_env(cls) -> "Config":
-
         def safe_int(value: str, default: int) -> int:
             try:
                 return int(value)

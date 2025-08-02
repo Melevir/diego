@@ -36,10 +36,7 @@ class BaseBackend(ABC):
 
     @abstractmethod
     def get_sources(
-        self, 
-        category: Optional[str] = None, 
-        country: Optional[str] = None, 
-        language: str = "en"
+        self, category: Optional[str] = None, country: Optional[str] = None, language: str = "en"
     ) -> Dict[str, Any]:
         """Get list of available news sources."""
         pass
@@ -49,11 +46,7 @@ class BaseBackend(ABC):
             raise ValueError(f"page_size must be an integer between 1 and {max_size}")
 
     def _handle_error(self, error: Exception) -> Dict[str, Any]:
-        return {
-            "status": "error", 
-            "message": str(error), 
-            "code": "client_error"
-        }
+        return {"status": "error", "message": str(error), "code": "client_error"}
 
     def _standardize_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
         if response.get("status") == "ok":

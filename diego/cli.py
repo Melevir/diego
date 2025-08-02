@@ -28,7 +28,7 @@ def get_news_client(source: str, config: Config):
             return NewsApiBackend(config.news_api_key), "newsapi"
         elif config.guardian_api_key:
             return GuardianBackend(config.guardian_api_key), "guardian"
-    
+
     raise click.ClickException(f"Unsupported source: {source}")
 
 
@@ -92,11 +92,11 @@ def list_topics():
     help="Output format (uses config default if not specified)",
 )
 @click.option(
-    "--source", 
-    "-s", 
-    type=click.Choice(["newsapi", "guardian", "auto"]), 
+    "--source",
+    "-s",
+    type=click.Choice(["newsapi", "guardian", "auto"]),
     default="auto",
-    help="News source to use (default: auto - try NewsAPI first, fallback to Guardian)"
+    help="News source to use (default: auto - try NewsAPI first, fallback to Guardian)",
 )
 def get_news(topic, query, country, limit, format, source):
     config = get_validated_config(source)
@@ -117,7 +117,7 @@ def get_news(topic, query, country, limit, format, source):
         client = get_news_client(source, config)
         actual_source = source
         click.echo(f"📡 Using {actual_source.upper()}")
-    
+
     max_limit = 200 if actual_source == "guardian" else config.max_page_size
     if limit > max_limit:
         click.echo(f"❌ Limit cannot exceed {max_limit} for {actual_source}")
@@ -217,11 +217,11 @@ def _print_detailed_article(index, article):
     help="Output format (uses config default if not specified)",
 )
 @click.option(
-    "--source", 
-    "-s", 
-    type=click.Choice(["newsapi", "guardian", "auto"]), 
+    "--source",
+    "-s",
+    type=click.Choice(["newsapi", "guardian", "auto"]),
     default="auto",
-    help="News source to use (default: auto - try NewsAPI first, fallback to Guardian)"
+    help="News source to use (default: auto - try NewsAPI first, fallback to Guardian)",
 )
 def sources(topic, country, format, source):
     config = get_validated_config(source)
