@@ -16,6 +16,10 @@ class Config:
     default_format: str = "simple"
     app_version: str = "1.0.0"
 
+    # Analytics settings
+    analytics_enabled: bool = True
+    analytics_retention_days: int = 365
+
     @classmethod
     def from_env(cls) -> "Config":
         def safe_int(value: str, default: int) -> int:
@@ -23,6 +27,11 @@ class Config:
                 return int(value)
             except (ValueError, TypeError):
                 return default
+
+        def safe_bool(value: str, default: bool) -> bool:
+            if value is None:
+                return default
+            return value.lower() in ("true", "1", "yes", "on")
 
         return cls(
             news_api_key=os.getenv("NEWS_API_KEY"),
@@ -34,6 +43,8 @@ class Config:
             max_page_size=safe_int(os.getenv("NEWS_MAX_PAGE_SIZE", "100"), 100),
             default_format=os.getenv("NEWS_DEFAULT_FORMAT", "simple"),
             app_version=os.getenv("APP_VERSION", "1.0.0"),
+            analytics_enabled=safe_bool(os.getenv("DIEGO_ANALYTICS_ENABLED", "true"), True),
+            analytics_retention_days=safe_int(os.getenv("DIEGO_ANALYTICS_RETENTION_DAYS", "365"), 365),
         )
 
     def validate(self, source: str = "newsapi") -> bool:
@@ -56,6 +67,10 @@ class Config:
             return False
 
         if len(self.default_language) != 2:
+            return False
+
+        # Analytics validation
+        if self.analytics_retention_days < 1 or self.analytics_retention_days > 3650:  # 1 day to 10 years
             return False
 
         return True
@@ -92,6 +107,9 @@ class Config:
 
         if len(self.default_language) != 2:
             errors.append("NEWS_DEFAULT_LANGUAGE must be a 2-letter language code")
+
+        if self.analytics_retention_days < 1 or self.analytics_retention_days > 3650:
+            errors.append("DIEGO_ANALYTICS_RETENTION_DAYS must be between 1 and 3650 days")
 
         return "\n".join(errors)
 
