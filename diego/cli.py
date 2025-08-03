@@ -2,9 +2,14 @@
 
 import click
 import json
+import sys
+import requests
+from typing import Optional
 from datetime import datetime
 from .backends import NewsApiBackend, GuardianBackend
 from .config import get_config, Config
+from bs4 import BeautifulSoup
+from anthropic import Anthropic
 
 NEWS_CATEGORIES = ["business", "entertainment", "general", "health", "science", "sports", "technology"]
 
@@ -47,6 +52,7 @@ def show_config():
     click.echo("=" * 30)
     click.echo(f"NewsAPI Key: {'✅ Set' if config.news_api_key else '❌ Not set'}")
     click.echo(f"Guardian API Key: {'✅ Set' if config.guardian_api_key else '❌ Not set'}")
+    click.echo(f"Claude API Key: {'✅ Set' if config.claude_api_key else '❌ Not set'}")
     click.echo(f"Default Country: {config.default_country}")
     click.echo(f"Default Language: {config.default_language}")
     click.echo(f"Default Page Size: {config.default_page_size}")
@@ -57,6 +63,7 @@ def show_config():
     click.echo("\n🔧 Environment Variables:")
     click.echo("- NEWS_API_KEY (optional)")
     click.echo("- GUARDIAN_API_KEY (optional)")
+    click.echo("- CLAUDE_API_KEY (optional)")
     click.echo("- NEWS_DEFAULT_COUNTRY (optional, default: us)")
     click.echo("- NEWS_DEFAULT_LANGUAGE (optional, default: en)")
     click.echo("- NEWS_DEFAULT_PAGE_SIZE (optional, default: 10)")
@@ -303,6 +310,164 @@ def _print_detailed_source(index, source):
     click.echo(f"    Language: {language.upper()}")
     if url:
         click.echo(f"    URL: {url}")
+
+
+def get_claude_client(config: Config) -> Anthropic:
+    """Initialize Claude client with API key."""
+    if not config.claude_api_key:
+        raise click.ClickException("Claude API key not configured. Set CLAUDE_API_KEY environment variable.")
+    return Anthropic(api_key=config.claude_api_key)
+
+
+def extract_text_from_url(url: str) -> str:
+    """Extract text content from a web URL."""
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        # Remove script and style elements
+        for script in soup(["script", "style"]):
+            script.decompose()
+
+        # Get text from common article containers
+        text_containers = soup.find_all(
+            ["article", "main", "div"],
+            class_=lambda x: x
+            and any(word in x.lower() for word in ["content", "article", "body", "story", "text", "post"]),
+        )
+
+        if text_containers:
+            text = " ".join([container.get_text() for container in text_containers])
+        else:
+            # Fallback to body text
+            text = soup.get_text()
+
+        # Clean up whitespace
+        lines = (line.strip() for line in text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        text = " ".join(chunk for chunk in chunks if chunk)
+
+        return text
+
+    except requests.RequestException as e:
+        raise click.ClickException(f"Error fetching URL: {str(e)}")
+    except Exception as e:
+        raise click.ClickException(f"Error extracting text from URL: {str(e)}")
+
+
+def read_text_from_file(file_path: str) -> str:
+    """Read text content from a file."""
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        raise click.ClickException(f"File not found: {file_path}")
+    except Exception as e:
+        raise click.ClickException(f"Error reading file: {str(e)}")
+
+
+def read_text_from_stdin() -> str:
+    """Read text content from stdin."""
+    try:
+        if sys.stdin.isatty():
+            click.echo("Enter article text (press Ctrl+D when finished):")
+        text = sys.stdin.read().strip()
+        if not text:
+            raise click.ClickException("No text provided")
+        return text
+    except KeyboardInterrupt:
+        raise click.ClickException("Operation cancelled")
+    except Exception as e:
+        raise click.ClickException(f"Error reading from stdin: {str(e)}")
+
+
+def summarize_with_claude(client: Anthropic, text: str) -> str:
+    """Generate a 3-sentence summary using Claude."""
+    try:
+        # Truncate text if too long (Claude has token limits)
+        max_chars = 100000  # Conservative limit
+        if len(text) > max_chars:
+            text = text[:max_chars] + "..."
+            click.echo("⚠️  Text truncated due to length limits")
+
+        prompt = f"""Please summarize the following article in exactly 3 sentences. The summary should be clear, concise, and capture the main points of the article.
+
+Article text:
+{text}
+
+Summary (exactly 3 sentences):"""
+
+        message = client.messages.create(
+            model="claude-3-haiku-20240307", max_tokens=200, messages=[{"role": "user", "content": prompt}]
+        )
+
+        summary = message.content[0].text.strip()
+
+        # Ensure we have exactly 3 sentences
+        sentences = [s.strip() for s in summary.split(".") if s.strip()]
+        if len(sentences) > 3:
+            summary = ". ".join(sentences[:3]) + "."
+        elif len(sentences) < 3:
+            # If Claude returned fewer than 3 sentences, keep as is
+            summary = ". ".join(sentences) + ("." if not summary.endswith(".") else "")
+
+        return summary
+
+    except Exception as e:
+        raise click.ClickException(f"Error generating summary with Claude: {str(e)}")
+
+
+@cli.command("summary")
+@click.option("--url", "-u", help="URL of the article to summarize")
+@click.option("--file", "-f", "file_path", help="Path to text file to summarize")
+def summary(url: Optional[str], file_path: Optional[str]):
+    """Summarize an article using Claude AI (exactly 3 sentences)."""
+    config = get_validated_config("claude")
+
+    # Determine input source
+    input_sources = sum([bool(url), bool(file_path)])
+
+    if input_sources > 1:
+        raise click.ClickException("Please specify only one input source (--url, --file, or stdin)")
+
+    try:
+        # Get article text based on input method
+        if url:
+            click.echo(f"🔗 Fetching article from: {url}")
+            text = extract_text_from_url(url)
+        elif file_path:
+            click.echo(f"📄 Reading article from: {file_path}")
+            text = read_text_from_file(file_path)
+        else:
+            # Read from stdin
+            text = read_text_from_stdin()
+
+        if not text.strip():
+            raise click.ClickException("No text content found to summarize")
+
+        # Show text length info
+        word_count = len(text.split())
+        click.echo(f"📝 Article length: {word_count} words")
+
+        # Generate summary using Claude
+        click.echo("🤖 Generating summary with Claude AI...")
+        claude_client = get_claude_client(config)
+        summary_text = summarize_with_claude(claude_client, text)
+
+        # Display the summary
+        click.echo("\n" + "=" * 60)
+        click.echo("📋 SUMMARY")
+        click.echo("=" * 60)
+        click.echo(summary_text)
+        click.echo("=" * 60)
+
+    except Exception as e:
+        click.echo(f"❌ Error: {str(e)}")
 
 
 if __name__ == "__main__":
