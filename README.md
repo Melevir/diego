@@ -1,7 +1,7 @@
 # Diego - News CLI Tool 📰
 
 [![CI Pipeline](https://github.com/Melevir/diego/actions/workflows/ci.yml/badge.svg)](https://github.com/Melevir/diego/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-89%25-brightgreen)](https://github.com/Melevir/diego/actions)
+[![Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen)](https://github.com/Melevir/diego/actions)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
@@ -40,37 +40,37 @@ export GUARDIAN_API_KEY='your-api-key-from-guardian'
 
 ```bash
 # List available news categories
-python cli.py list-topics
+python diego_cli.py list-topics
 
 # Get top technology news (auto-selects best available source)
-python cli.py get-news --topic technology
+python diego_cli.py get-news --topic technology
 
 # Use specific news source
-python cli.py get-news --source guardian --topic technology
-python cli.py get-news --source newsapi --topic business
+python diego_cli.py get-news --source guardian --topic technology
+python diego_cli.py get-news --source newsapi --topic business
 
 # Search for specific topics
-python cli.py get-news --query "artificial intelligence"
+python diego_cli.py get-news --query "artificial intelligence"
 
 # Get detailed format with custom options
-python cli.py get-news --topic business --country uk --limit 5 --format detailed
+python diego_cli.py get-news --topic business --country uk --limit 5 --format detailed
 
 # List news sources from different providers
-python cli.py sources --source guardian --topic technology
-python cli.py sources --source newsapi
+python diego_cli.py sources --source guardian --topic technology
+python diego_cli.py sources --source newsapi
 
 # Check current configuration
-python cli.py config
+python diego_cli.py config
 ```
 
 ## 📋 Commands
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `list-topics` | Show available news categories | `python cli.py list-topics` |
-| `get-news` | Get news by topic or search query | `python cli.py get-news --source guardian --topic tech` |
-| `sources` | List available news sources | `python cli.py sources --source newsapi --topic business` |
-| `config` | Show current configuration | `python cli.py config` |
+| `list-topics` | Show available news categories | `python diego_cli.py list-topics` |
+| `get-news` | Get news by topic or search query | `python diego_cli.py get-news --source guardian --topic tech` |
+| `sources` | List available news sources | `python diego_cli.py sources --source newsapi --topic business` |
+| `config` | Show current configuration | `python diego_cli.py config` |
 
 ### Source Options
 
@@ -107,30 +107,40 @@ export APP_VERSION='1.0.0'                # App version
 
 Diego consists of four main components:
 
-### 1. NewsOrgApiClient (`news_org_api_client.py`)
-Clean wrapper around the `newsapi-python` library with simplified signatures:
-- `get_top_headlines()` - Get breaking news and top stories
-- `search_articles()` - Search through all articles
-- `get_sources()` - Get available news sources
+### 1. Backend Architecture (`diego/backends/`)
+Modular news API backend system with unified interface:
+- `BaseBackend` - Abstract base class defining common interface
+- `NewsApiBackend` - Clean wrapper around the `newsapi-python` library
+- `GuardianBackend` - Guardian API client with NewsAPI-compatible interface
+- Automatic source fallback when `--source auto` is used (tries NewsAPI first, falls back to Guardian)
+- All backends provide: `get_top_headlines()`, `search_articles()`, `get_sources()`
 
-### 2. GuardianApiClient (`guardian_api_client.py`)
-Clean wrapper around The Guardian's Open Platform API with NewsAPI-compatible interface:
+### 2. NewsAPI Backend (`backends/newsapi_client.py`)
+Wrapper around the `newsapi-python` library with simplified signatures:
+- `get_top_headlines()` - Get breaking news and top stories
+- `search_articles()` - Search through all articles  
+- `get_sources()` - Get available news sources
+- Supports 80,000+ sources worldwide
+
+### 3. Guardian Backend (`backends/guardian_client.py`)
+Clean wrapper around The Guardian's Open Platform API:
 - `get_top_headlines()` - Get breaking news and top stories from Guardian
 - `search_articles()` - Search through Guardian's archive (1999-present)
 - `get_sources()` - Get Guardian sections as "sources"
-- Full compatibility with NewsOrgApiClient interface for seamless source switching
+- Full compatibility with NewsAPI interface for seamless source switching
+- Intelligent parameter mapping and response normalization
 
-### 3. Config Management (`config.py`)
+### 4. Config Management (`config.py`)
 Environment-based configuration with validation:
 - Dataclass-based configuration supporting multiple API keys
 - Environment variable loading with fallbacks
 - Source-specific validation with detailed error messages
 - Global singleton pattern
 
-### 4. CLI Interface (`cli.py`)
+### 5. CLI Interface (`cli.py`)
 Feature-rich command-line interface built with Click:
 - Multiple commands with intuitive options
-- Source selection with auto-fallback (`--source` option)
+- Intelligent source selection with auto-fallback (`--source` option)
 - Multiple output formats (simple, detailed, JSON)
 - Comprehensive error handling with graceful source switching
 - Configuration integration with multiple APIs
@@ -153,27 +163,38 @@ python -m pytest tests/test_config.py -v
 python run_tests.py
 ```
 
-**Test Coverage**: 89% (71 tests)
-- `config.py`: 100% coverage
-- `news_org_api_client.py`: 100% coverage  
-- `cli.py`: 92% coverage
+**Test Coverage**: 85% (115 tests)
+- `config.py`: 87% coverage
+- `backends/newsapi_client.py`: 100% coverage
+- `backends/guardian_client.py`: 86% coverage
+- `cli.py`: 89% coverage
 
 ## 📁 Project Structure
 
 ```
 diego/
-├── cli.py                      # Main CLI application
-├── config.py                   # Configuration management
-├── news_org_api_client.py      # NewsAPI wrapper client
-├── example_usage.py            # Usage examples
+├── diego/                      # Main package
+│   ├── __init__.py            # Package initialization
+│   ├── cli.py                 # Main CLI application
+│   ├── config.py              # Configuration management
+│   └── backends/              # News API backends
+│       ├── __init__.py        # Backend exports
+│       ├── base.py            # Abstract base backend class
+│       ├── newsapi_client.py  # NewsAPI wrapper client
+│       └── guardian_client.py # Guardian API wrapper client
+├── diego_cli.py               # CLI entry point script
 ├── run_tests.py               # Test runner script
 ├── pyproject.toml             # Project configuration
-├── requirements-test.txt       # Test dependencies
-├── tests/                     # Test suite
+├── requirements.txt           # Production dependencies
+├── requirements-test.txt      # Test dependencies
+├── docs/                      # Documentation
+│   └── guardian_api_guide.md  # Guardian API usage guide
+├── tests/                     # Test suite (115 tests)
 │   ├── conftest.py           # Test fixtures
-│   ├── test_cli.py           # CLI tests (17 tests)
-│   ├── test_config.py        # Config tests (20 tests)
-│   └── test_news_org_api_client.py  # Client tests (25 tests)
+│   ├── test_cli.py           # CLI tests
+│   ├── test_config.py        # Config tests
+│   ├── test_news_org_api_client.py    # NewsAPI client tests
+│   └── test_guardian_api_client.py    # Guardian client tests
 └── README.md                  # This file
 ```
 
@@ -182,39 +203,42 @@ diego/
 ### Basic Usage
 
 ```python
-from news_org_api_client import NewsOrgApiClient
+from diego.backends import NewsApiBackend, GuardianBackend
 
-# Initialize client
-client = NewsOrgApiClient('your-api-key')
+# Initialize NewsAPI client
+news_client = NewsApiBackend('your-newsapi-key')
 
-# Get top headlines
-headlines = client.get_top_headlines(category='technology', country='us')
+# Initialize Guardian client
+guardian_client = GuardianBackend('your-guardian-key')
+
+# Get top headlines (both clients have identical interface)
+headlines = news_client.get_top_headlines(category='technology', country='us')
+guardian_headlines = guardian_client.get_top_headlines(category='technology', country='uk')
 
 # Search articles
-articles = client.search_articles(
+articles = news_client.search_articles(
     query='machine learning',
-    from_date='2024-01-01',
-    sort_by='popularity'
+    page_size=25
 )
 
 # Get sources
-sources = client.get_sources(category='business', country='us')
+sources = news_client.get_sources(category='business', country='us')
 ```
 
 ### CLI Examples
 
 ```bash
 # Technology news from UK in detailed format
-python cli.py get-news --topic technology --country uk --format detailed
+python diego_cli.py get-news --topic technology --country uk --format detailed
 
 # Search with date filtering (API client method)
-python cli.py get-news --query "climate change" --limit 15
+python diego_cli.py get-news --query "climate change" --limit 15
 
 # Business news sources from US
-python cli.py sources --topic business --country us
+python diego_cli.py sources --topic business --country us
 
 # JSON output for programmatic use
-python cli.py get-news --topic science --format json
+python diego_cli.py get-news --topic science --format json
 ```
 
 ## 📜 License
