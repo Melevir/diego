@@ -15,8 +15,9 @@ A powerful command-line news aggregator supporting multiple news sources includi
 - 🌍 **Filter by country** and language
 - 📺 **List news sources** with filtering options
 - 🎨 **Multiple output formats** (simple, detailed, JSON)
+- 🤖 **AI-Powered Summarization**: Generate 3-sentence summaries using Claude AI
 - ⚙️ **Environment-based configuration**
-- 🧪 **Comprehensive test suite** (89% coverage)
+- 🧪 **Comprehensive test suite** (82% coverage)
 - 🛡️ **Robust error handling** with graceful source switching
 
 ## 🚀 Quick Start
@@ -31,9 +32,10 @@ cd diego
 # Install dependencies
 pip install -r requirements-test.txt
 
-# Set your API keys (at least one is required)
-export NEWS_API_KEY='your-api-key-from-newsapi.org'
-export GUARDIAN_API_KEY='your-api-key-from-guardian'
+# Set your API keys
+export NEWS_API_KEY='your-api-key-from-newsapi.org'        # For news fetching
+export GUARDIAN_API_KEY='your-api-key-from-guardian'       # For news fetching  
+export CLAUDE_API_KEY='your-api-key-from-anthropic'        # For article summarization
 ```
 
 ### Usage
@@ -61,6 +63,11 @@ python diego_cli.py sources --source newsapi
 
 # Check current configuration
 python diego_cli.py config
+
+# Summarize articles with Claude AI
+python diego_cli.py summary --url "https://example.com/article"
+python diego_cli.py summary --file "article.txt"
+echo "Article text here" | python diego_cli.py summary
 ```
 
 ## 📋 Commands
@@ -70,6 +77,7 @@ python diego_cli.py config
 | `list-topics` | Show available news categories | `python diego_cli.py list-topics` |
 | `get-news` | Get news by topic or search query | `python diego_cli.py get-news --source guardian --topic tech` |
 | `sources` | List available news sources | `python diego_cli.py sources --source newsapi --topic business` |
+| `summary` | Summarize article using Claude AI (3 sentences) | `python diego_cli.py summary --url "https://example.com/article"` |
 | `config` | Show current configuration | `python diego_cli.py config` |
 
 ### Source Options
@@ -85,9 +93,10 @@ All commands support a `--source` option to specify the news provider:
 Configure Diego using environment variables:
 
 ```bash
-# API Keys (at least one required)
+# API Keys
 export NEWS_API_KEY='your-newsapi-key'        # Get from https://newsapi.org/
 export GUARDIAN_API_KEY='your-guardian-key'   # Get from https://open-platform.theguardian.com/access/
+export CLAUDE_API_KEY='your-claude-key'       # Get from https://console.anthropic.com/
 
 # Optional (with defaults)
 export NEWS_DEFAULT_COUNTRY='us'          # Default country
@@ -102,6 +111,7 @@ export APP_VERSION='1.0.0'                # App version
 
 1. **NewsAPI**: Visit [newsapi.org](https://newsapi.org/) to get a free API key (1,000 requests/month)
 2. **Guardian API**: Visit [Guardian Open Platform](https://open-platform.theguardian.com/access/) to get a free API key (5,000 requests/day)
+3. **Claude AI**: Visit [Anthropic Console](https://console.anthropic.com/) to get an API key for article summarization
 
 ## 🏗️ Architecture
 
@@ -239,6 +249,11 @@ python diego_cli.py sources --topic business --country us
 
 # JSON output for programmatic use
 python diego_cli.py get-news --topic science --format json
+
+# Article summarization with Claude AI
+python diego_cli.py summary --url "https://www.bbc.com/news/technology-12345"
+python diego_cli.py summary --file "research_paper.txt"
+echo "Long article text here..." | python diego_cli.py summary
 ```
 
 ## 📜 License

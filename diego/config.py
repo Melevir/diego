@@ -7,6 +7,7 @@ import os
 class Config:
     news_api_key: Optional[str] = None
     guardian_api_key: Optional[str] = None
+    claude_api_key: Optional[str] = None
     default_country: str = "us"
     default_language: str = "en"
     default_page_size: int = 10
@@ -26,6 +27,7 @@ class Config:
         return cls(
             news_api_key=os.getenv("NEWS_API_KEY"),
             guardian_api_key=os.getenv("GUARDIAN_API_KEY"),
+            claude_api_key=os.getenv("CLAUDE_API_KEY"),
             default_country=os.getenv("NEWS_DEFAULT_COUNTRY", "us"),
             default_language=os.getenv("NEWS_DEFAULT_LANGUAGE", "en"),
             default_page_size=safe_int(os.getenv("NEWS_DEFAULT_PAGE_SIZE", "10"), 10),
@@ -38,6 +40,8 @@ class Config:
         if source == "newsapi" and not self.news_api_key:
             return False
         elif source == "guardian" and not self.guardian_api_key:
+            return False
+        elif source == "claude" and not self.claude_api_key:
             return False
         elif source == "auto" and not (self.news_api_key or self.guardian_api_key):
             return False
@@ -67,6 +71,10 @@ class Config:
             errors.append("GUARDIAN_API_KEY environment variable not set")
             errors.append("Get your API key from https://open-platform.theguardian.com/access/")
             errors.append("Set it with: export GUARDIAN_API_KEY='your-api-key-here'")
+        elif source == "claude" and not self.claude_api_key:
+            errors.append("CLAUDE_API_KEY environment variable not set")
+            errors.append("Get your API key from https://console.anthropic.com/")
+            errors.append("Set it with: export CLAUDE_API_KEY='your-api-key-here'")
         elif source == "auto" and not (self.news_api_key or self.guardian_api_key):
             errors.append("Neither NEWS_API_KEY nor GUARDIAN_API_KEY environment variable is set")
             errors.append("Get NewsAPI key from https://newsapi.org/")
