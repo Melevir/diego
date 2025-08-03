@@ -3,8 +3,8 @@ import pytest
 from unittest.mock import patch
 from typing import Dict, Any
 
-from config import Config
-from news_org_api_client import NewsOrgApiClient
+from diego.config import Config
+from diego.backends import NewsApiBackend
 
 
 @pytest.fixture
@@ -101,11 +101,11 @@ def sources_response() -> Dict[str, Any]:
 @pytest.fixture
 def mocked_newsapi_client():
     """Mock NewsApiClient from newsapi-python library."""
-    with patch("news_org_api_client.NewsApiClient") as mock:
+    with patch("diego.backends.newsapi_client.NewsApiLibClient") as mock:
         yield mock
 
 
 @pytest.fixture
-def news_client(config: Config, mocked_newsapi_client) -> NewsOrgApiClient:
-    """NewsOrgApiClient instance with mocked dependencies."""
-    return NewsOrgApiClient(config.news_api_key)
+def news_client(config: Config, mocked_newsapi_client) -> NewsApiBackend:
+    """NewsApiBackend instance with mocked dependencies."""
+    return NewsApiBackend(config.news_api_key)

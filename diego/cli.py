@@ -3,40 +3,50 @@
 import click
 import json
 from datetime import datetime
-from news_org_api_client import NewsOrgApiClient
-from config import get_config, Config
+from .backends import NewsApiBackend, GuardianBackend
+from .config import get_config, Config
 
-# News categories available in News API
 NEWS_CATEGORIES = ["business", "entertainment", "general", "health", "science", "sports", "technology"]
 
 
-def get_validated_config() -> Config:
-    """Get and validate configuration."""
+def get_validated_config(source: str = "newsapi") -> Config:
     config = get_config()
-    if not config.validate():
+    if not config.validate(source):
         click.echo("❌ Configuration Error:")
-        click.echo(config.get_error_message())
+        click.echo(config.get_error_message(source))
         raise click.Abort()
     return config
 
 
+def get_news_client(source: str, config: Config):
+    if source == "newsapi":
+        return NewsApiBackend(config.news_api_key)
+    elif source == "guardian":
+        return GuardianBackend(config.guardian_api_key)
+    elif source == "auto":
+        if config.news_api_key:
+            return NewsApiBackend(config.news_api_key), "newsapi"
+        elif config.guardian_api_key:
+            return GuardianBackend(config.guardian_api_key), "guardian"
+
+    raise click.ClickException(f"Unsupported source: {source}")
+
+
 @click.group()
-@click.version_option()
+@click.version_option(version="1.0.0")
 def cli():
-    """Diego - News CLI tool powered by NewsAPI"""
-    # Load version from config
-    config = get_config()
-    cli.version = config.app_version
+    """Diego - News CLI tool"""
+    pass
 
 
 @cli.command("config")
 def show_config():
-    """Show current configuration."""
     config = get_config()
 
     click.echo("📋 Current Configuration:")
     click.echo("=" * 30)
-    click.echo(f"API Key: {'✅ Set' if config.news_api_key else '❌ Not set'}")
+    click.echo(f"NewsAPI Key: {'✅ Set' if config.news_api_key else '❌ Not set'}")
+    click.echo(f"Guardian API Key: {'✅ Set' if config.guardian_api_key else '❌ Not set'}")
     click.echo(f"Default Country: {config.default_country}")
     click.echo(f"Default Language: {config.default_language}")
     click.echo(f"Default Page Size: {config.default_page_size}")
@@ -45,7 +55,8 @@ def show_config():
     click.echo(f"App Version: {config.app_version}")
 
     click.echo("\n🔧 Environment Variables:")
-    click.echo("- NEWS_API_KEY (required)")
+    click.echo("- NEWS_API_KEY (optional)")
+    click.echo("- GUARDIAN_API_KEY (optional)")
     click.echo("- NEWS_DEFAULT_COUNTRY (optional, default: us)")
     click.echo("- NEWS_DEFAULT_LANGUAGE (optional, default: en)")
     click.echo("- NEWS_DEFAULT_PAGE_SIZE (optional, default: 10)")
@@ -60,7 +71,6 @@ def show_config():
 
 @cli.command("list-topics")
 def list_topics():
-    """List available news topics/categories."""
     click.echo("Available news topics:")
     click.echo("-" * 25)
     for i, category in enumerate(NEWS_CATEGORIES, 1):
@@ -81,21 +91,37 @@ def list_topics():
     type=click.Choice(["simple", "detailed", "json"]),
     help="Output format (uses config default if not specified)",
 )
-def get_news(topic, query, country, limit, format):
-    """Get recent news articles by topic or search query."""
-    config = get_validated_config()
+@click.option(
+    "--source",
+    "-s",
+    type=click.Choice(["newsapi", "guardian", "auto"]),
+    default="auto",
+    help="News source to use (default: auto - try NewsAPI first, fallback to Guardian)",
+)
+def get_news(topic, query, country, limit, format, source):
+    config = get_validated_config(source)
 
-    # Use config defaults if not specified
     country = country or config.default_country
     limit = limit or config.default_page_size
     format = format or config.default_format
 
-    # Validate limit against config
-    if limit > config.max_page_size:
-        click.echo(f"❌ Limit cannot exceed {config.max_page_size}")
-        return
+    if source == "auto":
+        client_result = get_news_client(source, config)
+        if isinstance(client_result, tuple):
+            client, actual_source = client_result
+            click.echo(f"📡 Using {actual_source.upper()} (auto-detected)")
+        else:
+            client = client_result
+            actual_source = source
+    else:
+        client = get_news_client(source, config)
+        actual_source = source
+        click.echo(f"📡 Using {actual_source.upper()}")
 
-    client = NewsOrgApiClient(config.news_api_key)
+    max_limit = 200 if actual_source == "guardian" else config.max_page_size
+    if limit > max_limit:
+        click.echo(f"❌ Limit cannot exceed {max_limit} for {actual_source}")
+        return
 
     try:
         if query:
@@ -142,7 +168,6 @@ def get_news(topic, query, country, limit, format):
 
 
 def _print_simple_article(index, article):
-    """Print article in simple format."""
     title = article.get("title", "No title")
     source = article.get("source", {}).get("name", "Unknown source")
     published = article.get("publishedAt", "")
@@ -159,7 +184,6 @@ def _print_simple_article(index, article):
 
 
 def _print_detailed_article(index, article):
-    """Print article in detailed format."""
     title = article.get("title", "No title")
     source = article.get("source", {}).get("name", "Unknown source")
     author = article.get("author", "Unknown author")
@@ -192,14 +216,30 @@ def _print_detailed_article(index, article):
     type=click.Choice(["simple", "detailed", "json"]),
     help="Output format (uses config default if not specified)",
 )
-def sources(topic, country, format):
-    """List available news sources."""
-    config = get_validated_config()
+@click.option(
+    "--source",
+    "-s",
+    type=click.Choice(["newsapi", "guardian", "auto"]),
+    default="auto",
+    help="News source to use (default: auto - try NewsAPI first, fallback to Guardian)",
+)
+def sources(topic, country, format, source):
+    config = get_validated_config(source)
 
-    # Use config default if not specified
     format = format or config.default_format
 
-    client = NewsOrgApiClient(config.news_api_key)
+    if source == "auto":
+        client_result = get_news_client(source, config)
+        if isinstance(client_result, tuple):
+            client, actual_source = client_result
+            click.echo(f"📡 Using {actual_source.upper()} (auto-detected)")
+        else:
+            client = client_result
+            actual_source = source
+    else:
+        client = get_news_client(source, config)
+        actual_source = source
+        click.echo(f"📡 Using {actual_source.upper()}")
 
     try:
         response = client.get_sources(category=topic, country=country)
@@ -241,7 +281,6 @@ def sources(topic, country, format):
 
 
 def _print_simple_source(index, source):
-    """Print source in simple format."""
     name = source.get("name", "Unknown")
     category = source.get("category", "general")
     country = source.get("country", "unknown")
@@ -250,7 +289,6 @@ def _print_simple_source(index, source):
 
 
 def _print_detailed_source(index, source):
-    """Print source in detailed format."""
     name = source.get("name", "Unknown")
     description = source.get("description", "No description")
     category = source.get("category", "general")

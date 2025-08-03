@@ -5,25 +5,19 @@ import os
 
 @dataclass
 class Config:
-    """Configuration for Diego News CLI application."""
-
-    # News API settings
     news_api_key: Optional[str] = None
+    guardian_api_key: Optional[str] = None
     default_country: str = "us"
     default_language: str = "en"
     default_page_size: int = 10
     max_page_size: int = 100
 
-    # CLI settings
     default_format: str = "simple"
     app_version: str = "1.0.0"
 
     @classmethod
     def from_env(cls) -> "Config":
-        """Create Config instance from environment variables."""
-
         def safe_int(value: str, default: int) -> int:
-            """Safely convert string to int with fallback to default."""
             try:
                 return int(value)
             except (ValueError, TypeError):
@@ -31,6 +25,7 @@ class Config:
 
         return cls(
             news_api_key=os.getenv("NEWS_API_KEY"),
+            guardian_api_key=os.getenv("GUARDIAN_API_KEY"),
             default_country=os.getenv("NEWS_DEFAULT_COUNTRY", "us"),
             default_language=os.getenv("NEWS_DEFAULT_LANGUAGE", "en"),
             default_page_size=safe_int(os.getenv("NEWS_DEFAULT_PAGE_SIZE", "10"), 10),
@@ -39,9 +34,12 @@ class Config:
             app_version=os.getenv("APP_VERSION", "1.0.0"),
         )
 
-    def validate(self) -> bool:
-        """Validate configuration values."""
-        if not self.news_api_key:
+    def validate(self, source: str = "newsapi") -> bool:
+        if source == "newsapi" and not self.news_api_key:
+            return False
+        elif source == "guardian" and not self.guardian_api_key:
+            return False
+        elif source == "auto" and not (self.news_api_key or self.guardian_api_key):
             return False
 
         if self.default_page_size <= 0 or self.default_page_size > self.max_page_size:
@@ -58,14 +56,22 @@ class Config:
 
         return True
 
-    def get_error_message(self) -> str:
-        """Get detailed error message for configuration issues."""
+    def get_error_message(self, source: str = "newsapi") -> str:
         errors = []
 
-        if not self.news_api_key:
+        if source == "newsapi" and not self.news_api_key:
             errors.append("NEWS_API_KEY environment variable not set")
             errors.append("Get your API key from https://newsapi.org/")
             errors.append("Set it with: export NEWS_API_KEY='your-api-key-here'")
+        elif source == "guardian" and not self.guardian_api_key:
+            errors.append("GUARDIAN_API_KEY environment variable not set")
+            errors.append("Get your API key from https://open-platform.theguardian.com/access/")
+            errors.append("Set it with: export GUARDIAN_API_KEY='your-api-key-here'")
+        elif source == "auto" and not (self.news_api_key or self.guardian_api_key):
+            errors.append("Neither NEWS_API_KEY nor GUARDIAN_API_KEY environment variable is set")
+            errors.append("Get NewsAPI key from https://newsapi.org/")
+            errors.append("Get Guardian API key from https://open-platform.theguardian.com/access/")
+            errors.append("Set at least one: export NEWS_API_KEY='key' or export GUARDIAN_API_KEY='key'")
 
         if self.default_page_size <= 0 or self.default_page_size > self.max_page_size:
             errors.append(f"NEWS_DEFAULT_PAGE_SIZE must be between 1 and {self.max_page_size}")

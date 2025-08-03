@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import patch
 from typing import Dict, Any
 
-from config import Config, get_config, reload_config
+from diego.config import Config, get_config, reload_config
 
 
 @pytest.mark.parametrize(
@@ -147,9 +147,9 @@ async def test__get_config__returns_singleton(valid_env_vars: Dict[str, str]) ->
     """Test that get_config returns same instance on multiple calls."""
     with patch.dict(os.environ, valid_env_vars, clear=True):
         # Clear any existing global config
-        import config
+        import diego.config
 
-        config._config = None
+        diego.config._config = None
 
         config1 = get_config()
         config2 = get_config()
@@ -161,9 +161,9 @@ async def test__get_config__returns_singleton(valid_env_vars: Dict[str, str]) ->
 async def test__reload_config__creates_new_instance(valid_env_vars: Dict[str, str]) -> None:
     """Test that reload_config creates new instance with updated env."""
     # Clear any existing global config
-    import config
+    import diego.config
 
-    config._config = None
+    diego.config._config = None
 
     # First load with original env
     with patch.dict(os.environ, valid_env_vars, clear=True):
