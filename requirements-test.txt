@@ -7,4 +7,6 @@ newsapi-python>=0.2.7
 requests>=2.25.0
 anthropic>=0.40.0
 beautifulsoup4>=4.12.0
+pandas>=2.0.0
+matplotlib>=3.7.0
 ruff>=0.1.0

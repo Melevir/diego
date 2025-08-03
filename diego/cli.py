@@ -10,8 +10,20 @@ from .backends import NewsApiBackend, GuardianBackend
 from .config import get_config, Config
 from bs4 import BeautifulSoup
 from anthropic import Anthropic
+from .analytics import AnalyticsTracker
 
 NEWS_CATEGORIES = ["business", "entertainment", "general", "health", "science", "sports", "technology"]
+
+# Global analytics tracker
+_analytics_tracker = None
+
+
+def get_analytics_tracker() -> AnalyticsTracker:
+    """Get global analytics tracker instance."""
+    global _analytics_tracker
+    if _analytics_tracker is None:
+        _analytics_tracker = AnalyticsTracker()
+    return _analytics_tracker
 
 
 def get_validated_config(source: str = "newsapi") -> Config:
@@ -46,6 +58,10 @@ def cli():
 
 @cli.command("config")
 def show_config():
+    """Show current configuration including analytics settings."""
+    tracker = get_analytics_tracker()
+    tracker.start_session()
+
     config = get_config()
 
     click.echo("📋 Current Configuration:")
@@ -60,6 +76,11 @@ def show_config():
     click.echo(f"Default Format: {config.default_format}")
     click.echo(f"App Version: {config.app_version}")
 
+    click.echo("\n📊 Analytics Settings:")
+    click.echo(f"Analytics Enabled: {'✅ Yes' if config.analytics_enabled else '❌ No'}")
+    click.echo(f"Data Retention: {config.analytics_retention_days} days")
+    click.echo(f"Tracking Active: {'✅ Yes' if tracker.is_enabled() else '❌ No'}")
+
     click.echo("\n🔧 Environment Variables:")
     click.echo("- NEWS_API_KEY (optional)")
     click.echo("- GUARDIAN_API_KEY (optional)")
@@ -70,6 +91,10 @@ def show_config():
     click.echo("- NEWS_MAX_PAGE_SIZE (optional, default: 100)")
     click.echo("- NEWS_DEFAULT_FORMAT (optional, default: simple)")
     click.echo("- APP_VERSION (optional, default: 1.0.0)")
+    click.echo("- DIEGO_ANALYTICS_ENABLED (optional, default: true)")
+    click.echo("- DIEGO_ANALYTICS_RETENTION_DAYS (optional, default: 365)")
+
+    tracker.track_config_view()
 
     if not config.validate():
         click.echo("\n❌ Configuration Issues:")
@@ -78,6 +103,10 @@ def show_config():
 
 @cli.command("list-topics")
 def list_topics():
+    """List available news topics and categories."""
+    tracker = get_analytics_tracker()
+    tracker.start_session()
+
     click.echo("Available news topics:")
     click.echo("-" * 25)
     for i, category in enumerate(NEWS_CATEGORIES, 1):
@@ -85,6 +114,8 @@ def list_topics():
 
     click.echo(f"\nTotal: {len(NEWS_CATEGORIES)} categories")
     click.echo("\nUse 'get-news --topic <category>' to get news for a specific topic")
+
+    tracker.track_topics_list()
 
 
 @cli.command("get-news")
@@ -106,6 +137,10 @@ def list_topics():
     help="News source to use (default: auto - try NewsAPI first, fallback to Guardian)",
 )
 def get_news(topic, query, country, limit, format, source):
+    """Get news articles by topic or search query."""
+    tracker = get_analytics_tracker()
+    tracker.start_session()
+
     config = get_validated_config(source)
 
     country = country or config.default_country
@@ -153,6 +188,7 @@ def get_news(topic, query, country, limit, format, source):
 
         if not articles:
             click.echo("No articles found.")
+            tracker.track_search(topic=topic, source=actual_source, keywords=query, country=country, result_count=0)
             return
 
         click.echo(f"Found {total_results} articles (showing {len(articles)})")
@@ -170,8 +206,15 @@ def get_news(topic, query, country, limit, format, source):
                 if i < len(articles):
                     click.echo()
 
+        # Track successful search
+        tracker.track_search(
+            topic=topic, source=actual_source, keywords=query, country=country, result_count=len(articles)
+        )
+
     except Exception as e:
         click.echo(f"❌ Error fetching news: {str(e)}")
+        # Track failed search (source might not be available in exception context)
+        tracker.track_search(topic=topic, source=source, keywords=query, country=country, result_count=0)
 
 
 def _print_simple_article(index, article):
@@ -231,6 +274,10 @@ def _print_detailed_article(index, article):
     help="News source to use (default: auto - try NewsAPI first, fallback to Guardian)",
 )
 def sources(topic, country, format, source):
+    """List available news sources with filtering options."""
+    tracker = get_analytics_tracker()
+    tracker.start_session()
+
     config = get_validated_config(source)
 
     format = format or config.default_format
@@ -283,8 +330,13 @@ def sources(topic, country, format, source):
                 if i < len(sources_list):
                     click.echo()
 
+        # Track successful sources listing
+        tracker.track_sources_list(source=actual_source, topic=topic, country=country, result_count=len(sources_list))
+
     except Exception as e:
         click.echo(f"❌ Error fetching sources: {str(e)}")
+        # Track failed sources listing
+        tracker.track_sources_list(source=source, topic=topic, country=country, result_count=0)
 
 
 def _print_simple_source(index, source):
@@ -427,6 +479,9 @@ Summary (exactly 3 sentences):"""
 @click.option("--file", "-f", "file_path", help="Path to text file to summarize")
 def summary(url: Optional[str], file_path: Optional[str]):
     """Summarize an article using Claude AI (exactly 3 sentences)."""
+    tracker = get_analytics_tracker()
+    tracker.start_session()
+
     config = get_validated_config("claude")
 
     # Determine input source
@@ -466,8 +521,262 @@ def summary(url: Optional[str], file_path: Optional[str]):
         click.echo(summary_text)
         click.echo("=" * 60)
 
+        # Track successful summary
+        source_type = "url" if url else "file" if file_path else "stdin"
+        duration = tracker.end_session()
+        tracker.track_summary(source_type=source_type, duration=duration)
+
     except Exception as e:
         click.echo(f"❌ Error: {str(e)}")
+        # Track failed summary
+        source_type = "url" if url else "file" if file_path else "stdin"
+        duration = tracker.end_session()
+        tracker.track_summary(source_type=source_type, duration=duration)
+
+
+@cli.command("analytics")
+@click.option("--period", "-p", default=30, help="Analysis period in days")
+@click.option("--show-bias-score", is_flag=True, help="Include bias analysis")
+@click.option("--export-report", "-e", help="Export report to file")
+def analytics_command(period: int, show_bias_score: bool, export_report: Optional[str]):
+    """View news consumption analytics and insights."""
+    from .analytics import InsightsGenerator, DataExporter
+
+    tracker = get_analytics_tracker()
+    tracker.start_session()
+
+    try:
+        # Generate insights report
+        insights = InsightsGenerator()
+        report = insights.generate_consumption_report(period)
+
+        # Display key metrics
+        key_metrics = report.get("key_metrics", {})
+        click.echo(f"📊 Analytics Report ({period} days)")
+        click.echo("=" * 50)
+        click.echo(f"Total Activities: {key_metrics.get('total_activities', 0)}")
+        click.echo(f"Daily Average: {key_metrics.get('daily_average', 0):.1f}")
+        click.echo(f"Unique Sources: {key_metrics.get('unique_sources', 0)}")
+        click.echo(f"Topics Explored: {key_metrics.get('unique_topics', 0)}")
+        click.echo(f"Engagement Score: {key_metrics.get('engagement_score', 0):.2f}")
+
+        # Show health score
+        health_score = report.get("health_score", {})
+        click.echo(f"\n🏥 Consumption Health: {health_score.get('interpretation', 'Unknown').title()}")
+        click.echo(f"Overall Score: {health_score.get('overall_score', 0):.2f}/1.0")
+        click.echo(f"{health_score.get('message', '')}")
+
+        # Show bias analysis if requested
+        if show_bias_score:
+            source_analysis = report.get("source_analysis", {})
+            click.echo("\n⚖️ Source Diversity Analysis:")
+            click.echo(f"Diversity Score: {source_analysis.get('diversity_score', 0):.2f}")
+
+            political_balance = source_analysis.get("political_balance", {})
+            total_sources = sum(political_balance.values())
+            if total_sources > 0:
+                left_pct = (political_balance.get("left", 0) / total_sources) * 100
+                center_pct = (political_balance.get("center", 0) / total_sources) * 100
+                right_pct = (political_balance.get("right", 0) / total_sources) * 100
+                click.echo(
+                    f"Political Balance: Left {left_pct:.1f}% | Center {center_pct:.1f}% | Right {right_pct:.1f}%"
+                )
+
+            echo_chamber = source_analysis.get("echo_chamber_status", {})
+            if echo_chamber.get("is_echo_chamber", False):
+                click.echo(f"⚠️ Echo Chamber Detected: {echo_chamber.get('echo_chamber_type', 'Unknown')}")
+
+        # Show key insights
+        insights_list = report.get("insights", [])
+        if insights_list:
+            click.echo("\n💡 Key Insights:")
+            for insight in insights_list[:3]:  # Show top 3 insights
+                click.echo(f"• {insight.get('insight', '')}: {insight.get('detail', '')}")
+
+        # Export report if requested
+        if export_report:
+            exporter = DataExporter()
+            exported_file = exporter.export_insights_report(
+                days=period,
+                format_type="html" if export_report.endswith(".html") else "json",
+                output_file=export_report,
+            )
+            click.echo(f"\n📄 Report exported to: {exported_file}")
+
+        tracker.track_analytics_view(period, "basic" if not show_bias_score else "detailed")
+
+    except Exception as e:
+        click.echo(f"❌ Error generating analytics: {str(e)}")
+
+
+@cli.command("recommend")
+@click.option("--balance-political-spectrum", is_flag=True, help="Focus on political balance")
+@click.option("--suggest-topics", is_flag=True, help="Suggest new topics to explore")
+@click.option("--limit", "-l", default=5, help="Number of recommendations")
+def recommend_command(balance_political_spectrum: bool, suggest_topics: bool, limit: int):
+    """Get personalized recommendations for balanced news consumption."""
+    from .analytics import NewsRecommender
+
+    tracker = get_analytics_tracker()
+    tracker.start_session()
+
+    try:
+        recommender = NewsRecommender()
+
+        if suggest_topics:
+            # Topic recommendations
+            topic_recs = recommender.get_topic_recommendations(limit=limit)
+            click.echo("🎯 Topic Recommendations:")
+            click.echo("=" * 30)
+
+            recommendations = topic_recs.get("recommendations", [])
+            if recommendations:
+                for rec in recommendations:
+                    click.echo(f"• {rec['topic'].title()}: {rec['reason']}")
+            else:
+                click.echo("You're exploring topics well! Keep up the great coverage.")
+
+            click.echo(f"\nTopic Coverage: {topic_recs.get('topic_coverage', '0/7')}")
+
+        else:
+            # Source recommendations
+            source_recs = recommender.get_source_recommendations(limit=limit)
+            click.echo("📰 Source Recommendations:")
+            click.echo("=" * 30)
+
+            recommendations = source_recs.get("recommendations", [])
+            if recommendations:
+                for rec in recommendations:
+                    click.echo(f"• {rec['source'].title()}: {rec['reason']}")
+            else:
+                click.echo("Your source diversity looks good! Keep reading varied perspectives.")
+
+            click.echo(f"\nCurrent Diversity Score: {source_recs.get('current_diversity_score', 0):.2f}")
+            click.echo(f"Rationale: {source_recs.get('rationale', '')}")
+
+            if source_recs.get("echo_chamber_risk", False):
+                click.echo("\n⚠️ Echo chamber detected! Consider the recommendations above.")
+
+        # Comprehensive recommendations
+        if balance_political_spectrum:
+            comprehensive = recommender.get_comprehensive_recommendations()
+            click.echo("\n🎯 Priority Actions:")
+            for action in comprehensive.get("priority_actions", []):
+                click.echo(f"• {action}")
+
+        rec_type = "sources" if not suggest_topics else "topics"
+        tracker.track_recommendations_view(rec_type)
+
+    except Exception as e:
+        click.echo(f"❌ Error generating recommendations: {str(e)}")
+
+
+@cli.command("export")
+@click.option(
+    "--format", "-f", "format_type", default="csv", type=click.Choice(["csv", "json", "html"]), help="Export format"
+)
+@click.option("--period", "-p", default=30, help="Period in days to export")
+@click.option("--include-sensitive", is_flag=True, help="Include detailed consumption data")
+@click.option("--output", "-o", help="Output file path")
+def export_command(format_type: str, period: int, include_sensitive: bool, output: Optional[str]):
+    """Export analytics data in various formats."""
+    from .analytics import DataExporter
+
+    tracker = get_analytics_tracker()
+    tracker.start_session()
+
+    try:
+        exporter = DataExporter()
+
+        # Privacy warning for sensitive data
+        if include_sensitive:
+            click.echo("⚠️ Including sensitive data (search queries, detailed timestamps)")
+            if not click.confirm("Continue with sensitive data export?"):
+                click.echo("Export cancelled.")
+                return
+
+        # Export data
+        exported_file = exporter.export_consumption_data(
+            format_type=format_type, days=period, include_sensitive=include_sensitive, output_file=output
+        )
+
+        click.echo("✅ Data exported successfully!")
+        click.echo(f"📄 File: {exported_file}")
+        click.echo(f"📅 Period: {period} days")
+        click.echo(f"🔒 Sensitive data: {'Included' if include_sensitive else 'Excluded'}")
+
+        # Privacy reminder
+        if include_sensitive:
+            click.echo("\n🔐 Privacy Notice:")
+            click.echo("Your exported data contains detailed information.")
+            click.echo("Keep this file secure and delete when no longer needed.")
+
+        tracker.track_export(format_type, period)
+
+    except Exception as e:
+        click.echo(f"❌ Error exporting data: {str(e)}")
+
+
+@cli.command("privacy")
+@click.option("--disable-tracking", is_flag=True, help="Disable analytics tracking")
+@click.option("--enable-tracking", is_flag=True, help="Enable analytics tracking")
+@click.option("--clear-data", is_flag=True, help="Clear all analytics data")
+@click.option("--show-summary", is_flag=True, help="Show privacy summary")
+def privacy_command(disable_tracking: bool, enable_tracking: bool, clear_data: bool, show_summary: bool):
+    """Manage analytics privacy settings and data."""
+    from .analytics import DataExporter
+
+    tracker = get_analytics_tracker()
+
+    try:
+        if disable_tracking:
+            tracker.disable_tracking()
+            click.echo("✅ Analytics tracking disabled")
+            click.echo("📊 No new data will be collected")
+
+        elif enable_tracking:
+            tracker.enable_tracking()
+            click.echo("✅ Analytics tracking enabled")
+            click.echo("📊 Usage data collection resumed")
+
+        elif clear_data:
+            click.echo("⚠️ This will permanently delete all analytics data")
+            if click.confirm("Are you sure you want to clear all data?"):
+                tracker.reset_analytics()
+                click.echo("✅ All analytics data cleared")
+            else:
+                click.echo("Data clearing cancelled")
+
+        elif show_summary or True:  # Default action
+            exporter = DataExporter()
+            privacy_summary = exporter.get_privacy_summary()
+
+            click.echo("🔐 Privacy Summary:")
+            click.echo("=" * 30)
+            click.echo(f"Tracking Status: {'✅ Enabled' if privacy_summary['tracking_enabled'] else '❌ Disabled'}")
+            click.echo(f"Data Retention: {privacy_summary['data_retention_days']} days")
+            click.echo(f"Records Stored: {privacy_summary['total_consumption_records']}")
+            click.echo(f"Storage Location: {privacy_summary['storage_location']}")
+
+            if privacy_summary.get("oldest_record"):
+                click.echo(f"Oldest Record: {privacy_summary['oldest_record'][:10]}")
+
+            click.echo("\n📊 Data Categories:")
+            for category in privacy_summary["data_categories"]:
+                click.echo(f"• {category}")
+
+            click.echo("\n🛡️ Privacy Controls:")
+            for control in privacy_summary["privacy_controls"]:
+                click.echo(f"• {control}")
+
+            click.echo("\n💡 Commands:")
+            click.echo("• diego privacy --disable-tracking  # Stop data collection")
+            click.echo("• diego privacy --enable-tracking   # Resume data collection")
+            click.echo("• diego privacy --clear-data        # Delete all data")
+            click.echo("• diego export --format json        # Export your data")
+
+    except Exception as e:
+        click.echo(f"❌ Error managing privacy settings: {str(e)}")
 
 
 if __name__ == "__main__":
